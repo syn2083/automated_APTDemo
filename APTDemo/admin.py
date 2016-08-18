@@ -1,3 +1,7 @@
 from django.contrib import admin
+from .models import DemoConfig, JIFTemplate, ProcManager
 
-# Register your models here.
+
+admin.site.register(DemoConfig)
+admin.site.register(JIFTemplate)
+admin.site.register(ProcManager)

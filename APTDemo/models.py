@@ -1,8 +1,9 @@
-import logging
+from automated_APTDemo import logging_setup
 from django.db import models
 from django.utils import timezone
 
-logger = logging.getLogger(__name__)
+logger = logging_setup.init_logging()
+
 
 class ProcManager(models.Model):
     id = models.AutoField(primary_key=True)
@@ -18,19 +19,27 @@ class ProcManager(models.Model):
 
 class DemoConfig(models.Model):
     id = models.AutoField(primary_key=True)
-    idc_1_path = models.CharField(verbose_name='IDC 1 Path', max_length=200)
+    jdf_input_path = models.CharField(verbose_name='JIF Input Folder', max_length=200,
+                                      default='C:/APTApplication/Server/Inputs/JDFInput')
+    reprint_path = models.CharField(verbose_name='Reprint Folder', max_length=200,
+                                    default='C:/APTApplication/Server/Outputs/ReprintFiles')
+    proc_phase_path = models.CharField(verbose_name='Processing Phase XML Folder', max_length=200,
+                                       default='C:/APTApplication/Server/Outputs/WIP')
+    jif_acks_path = models.CharField(verbose_name='JIF ACKs Folder', max_length=200,
+                                     default='C:/APTApplication/Server/Inputs/JIFAcks')
+    idc_1_path = models.CharField(verbose_name='IDC 1 Path', max_length=200, default='C:/APTApplication/IDC/IDC_1')
     idc_1_type = models.CharField(verbose_name='IDC 1 Device Type', max_length=40)
-    idc_1_time = models.IntegerField(verbose_name='IDC 1 Scans per hour', max_length=6)
-    idc_2_path = models.CharField(verbose_name='IDC 2 Path', max_length=200)
+    idc_1_time = models.IntegerField(verbose_name='IDC 1 Scans per hour')
+    idc_2_path = models.CharField(verbose_name='IDC 2 Path', max_length=200, default='C:/APTApplication/IDC/IDC_2')
     idc_2_type = models.CharField(verbose_name='IDC 2 Device Type', max_length=40)
-    idc_2_time = models.IntegerField(verbose_name='IDC 2 Scans per hour', max_length=6)
-    idc_3_path = models.CharField(verbose_name='IDC 3 Path', max_length=200)
+    idc_2_time = models.IntegerField(verbose_name='IDC 2 Scans per hour')
+    idc_3_path = models.CharField(verbose_name='IDC 3 Path', max_length=200, default='C:/APTApplication/IDC/IDC_3')
     idc_3_type = models.CharField(verbose_name='IDC 3 Device Type', max_length=40)
-    idc_3_time = models.IntegerField(verbose_name='IDC 3 Scans per hour', max_length=6)
-    idc_4_path = models.CharField(verbose_name='IDC 4 Path', max_length=200)
+    idc_3_time = models.IntegerField(verbose_name='IDC 3 Scans per hour')
+    idc_4_path = models.CharField(verbose_name='IDC 4 Path', max_length=200, default='C:/APTApplication/IDC/IDC_4')
     idc_4_type = models.CharField(verbose_name='IDC 4 Device Type', max_length=40)
-    idc_4_time = models.IntegerField(verbose_name='IDC 4 Scans per hour', max_length=6)
-    td_multi_path = models.CharField(verbose_name='TD Input Path', max_length=200)
+    idc_4_time = models.IntegerField(verbose_name='IDC 4 Scans per hour')
+    td_multi_path = models.CharField(verbose_name='TD Input Path', max_length=200, default='C:/APTApplication/IDC/TD')
     td_type = models.CharField(verbose_name='TD Device Type', max_length=40)
 
     def save_demo(self):

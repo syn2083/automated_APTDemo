@@ -2,12 +2,19 @@ import time
 import sys
 import os
 import shutil
+from automated_APTDemo import logging_setup
 from watchdog.observers import Observer
 from watchdog.events import PatternMatchingEventHandler
+from django.shortcuts import get_object_or_404
+from APTDemo.models import DemoConfig
+
+logger = logging_setup.init_logging()
 
 
 class FolderHandler(PatternMatchingEventHandler):
-    patterns = ['*.accepted', "*.lxml"]
+    jif_proc_pattern = ['*.accepted']
+    reprint_pattern = ['*.txt']
+    proc_xml_pattern = ['*.xml']
 
     def process(self, event):
         """
