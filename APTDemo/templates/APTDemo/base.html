@@ -2,9 +2,9 @@
 <html>
     <head>
         <title>Ironsides JIF Generator</title>
-        <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
-        <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap-theme.min.css">
-        <link href='//fonts.googleapis.com/css?family=Roboto+Mono' rel='stylesheet' type='text/css'>
+        <link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+        <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css">
+        <link href='https://fonts.googleapis.com/css?family=Roboto+Mono' rel='stylesheet' type='text/css'>
         <link rel="stylesheet" href="{% static 'css/APTDemo.css' %}">
     </head>
     <body>
@@ -15,9 +15,11 @@
     <div class="content container">
         <div class="row">
             <div class="col-md-8">
+            <div class="container">
             <a href="{% url 'demo_config'%}">Demo Config</a>
             {% block content %}
             {% endblock %}
+            </div>
             </div>
         </div>
     </div>
