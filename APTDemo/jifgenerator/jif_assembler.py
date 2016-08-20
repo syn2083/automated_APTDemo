@@ -3,6 +3,9 @@ from os import path
 from .jif_templater import Template
 from .prog_utilities import folder_construct, str_to_list, find_shift
 from .. import settings
+from django.shortcuts import get_object_or_404
+from ..models import DemoConfig
+from automated_APTDemo import logging_setup
 
 __author__ = 'venom'
 
@@ -15,21 +18,39 @@ Output
 --exit_data
 --jif_output"""
 
+logger = logging_setup.init_logging()
+
 
 class JIFBuilder(Template):
-    def __init__(self, icd_target, jdf_folder, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, icd_target, jdf_folder):
+        super().__init__()
         self.out = jdf_folder
+        demo = get_object_or_404(DemoConfig, pk=1)
         if icd_target == 'icd_1':
             self.site_prefix = 'A10'
+            self.proc_phase = '10, 30'
+            self.end_phase = '30'
+            self.p_speed = ((demo.idc_1_time // 60) // 60)
+            self.i_speed = None
         if icd_target == 'icd_2':
             self.site_prefix = 'A20'
+            self.proc_phase = '20'
+            self.end_phase = '20'
+            self.p_speed = ((demo.idc_2_time // 60) // 60)
+            self.i_speed = None
         if icd_target == 'icd_3':
             self.site_prefix = 'A30'
-        if icd_target == 'icd_4':
-            self.site_prefix = 'A40'
+            self.proc_phase = '30'
+            self.end_phase = '30'
+            self.p_speed = None
+            self.i_speed = ((demo.idc_3_time // 60) // 60)
         if icd_target == 'td':
-            self.site_prefix = 'A50'
+            self.site_prefix = 'A40'
+            self.proc_phase = '30'
+            self.end_phase = '30'
+            self.p_speed = None
+            self.i_speed = None
+        self.r_speed = ((demo.idc_4_time // 60) // 60)
 
     def piece_builder(self, piece_id):
         plist = []
@@ -37,14 +58,9 @@ class JIFBuilder(Template):
 
         plist.append("   <Piece>")
         plist.append("    <ID>{pieceid}</ID>".format(pieceid=str(piece_id).zfill(6)))
-
-        if not int(self.var_sheets):
-            sheet_count = self.num_sheets
-            plist.append("    <TotalSheets>2</TotalSheets>")
-        else:
-            rlist = [i.strip() for i in self.sheet_range.split(',')]
-            sheet_count = randint(int(rlist[0]), int(rlist[1]))
-            plist.append("    <TotalSheets>{totals}</TotalSheets>".format(totals=str(sheet_count)))
+        rlist = [i.strip() for i in self.sheet_range.split(',')]
+        sheet_count = randint(int(rlist[0]), int(rlist[1]))
+        plist.append("    <TotalSheets>{totals}</TotalSheets>".format(totals=str(sheet_count)))
         plist.append("   </Piece>")
         return [bstr.join(plist), sheet_count]
 
@@ -54,8 +70,15 @@ class JIFBuilder(Template):
 
         if not self.current_jobid:
             self.jobid_loader()
+        logger.debug('Starting to build JIF {}{}.'.format(self.site_prefix, self.id_to_str(self.current_jobid)))
         conv_dict = {'job_type': [self.job_type, None],
                      'job_name': [self.job_name, None],
+                     'job_number': [self.job_number, None],
+                     'product_name': [self.product_name, None],
+                     'prod_loc': [self.prod_loc, None],
+                     'envelope_id': [self.envelope_id, None],
+                     'stock_id': [self.stock_id, None],
+                     'stock_type': [self.stock_type, None],
                      'account': [self.account, None],
                      'jobclass': [self.jobclass, None],
                      'imp_mult': [self.imp_mult, None],
@@ -71,11 +94,9 @@ class JIFBuilder(Template):
         for k,v in conv_dict.items():
             v[1] = str_to_list(v[0])
 
-        if self.damages:
-            dc = randint(1, 10)
-            self.damage_count = (self.num_jifs * (dc / 100))
-            if self.damage_count < 1:
-                self.damage_count = 1
+        if 4 <= randint(1, 10):
+            self.damage_count = 1
+            self.damages = 1
 
         for i in range(0, self.num_jifs):
             if not self.generated_jobs:
@@ -84,37 +105,38 @@ class JIFBuilder(Template):
                 if self.current_bad <= self.damage_count:
                     make_damages = 1
                     self.current_bad += 1
-                else:
-                    make_damages = 0
             jif_strings = []
             sheet_list = []
             jif_strings.append("""<?xml version="1.0" encoding="UTF-8"?>\n <JobTicket>\n <Version>2.2</Version>""")
             jif_strings.append(" <JobID>{pref}{jobid}</JobID>".format(pref=self.site_prefix,
                                                                       jobid=self.id_to_str(self.current_jobid)))
-            jif_strings.append(" <JobType>{jobtype}</JobType>".format(jobtype=choice(conv_dict['job_type'][1])))
-            jif_strings.append(" <JobName>{jobname}</JobName>".format(jobname=choice(conv_dict['job_name'][1])))
-            jif_strings.append(" <AccountID>{accountid}</AccountID>".format(accountid=choice(conv_dict['account'][1])))
+            jif_strings.append(" <JobType>{}</JobType>".format(choice(conv_dict['job_type'][1])))
+            jif_strings.append(" <JobName>{}</JobName>".format(choice(conv_dict['job_name'][1])))
+            jif_strings.append(" <JobNumber>{}</JobNumber>".format(choice(conv_dict['job_number'][1])))
+            jif_strings.append(" <ProductName>{}</ProductName>".format(choice(conv_dict['product_name'][1])))
+            jif_strings.append(" <AccountID>{}</AccountID>".format(choice(conv_dict['account'][1])))
             jif_strings.append(" <StartSequence>000001</StartSequence>")
             count = [i.strip() for i in self.piece_range.split(',')]
             self.current_piececount = randint(int(count[0]), int(count[1]))
-            jif_strings.append(" <EndSequence>{lastnumber}</EndSequence>".format(lastnumber=
-                                                                                 str(self.current_piececount)
-                                                                                 .zfill(6)))
-            jif_strings.append(" <PieceCount>{piececount}</PieceCount>".format(piececount=
-                                                                               str(self.current_piececount)))
-            jif_strings.append(" <CreationDate>{creation}</CreationDate>".format(creation=self.creation[0]))
-            jif_strings.append(" <JobDeadLine>{deadline}</JobDeadLine>".format(deadline=self.deadline))
+            jif_strings.append(" <EndSequence>{}</EndSequence>".format(str(self.current_piececount).zfill(6)))
+            jif_strings.append(" <PieceCount>{}</PieceCount>".format(str(self.current_piececount)))
+            jif_strings.append(" <CreationDate>{}</CreationDate>".format(self.creation[0]))
+            jif_strings.append(" <JobDeadLine/>")
             jif_strings.append(" <PrintMode>1</PrintMode>\n <PageComposition>2</PageComposition>")
-            jif_strings.append(" <ProcessingPhases>{pphase}</ProcessingPhases>".format(pphase=self.proc_phase))
-            jif_strings.append(" <EndProcess>{endproc}</EndProcess>".format(endproc=self.end_phase))
-            jif_strings.append(" <ProductionLocation>{prodloc}</ProductionLocation>".format(prodloc=self.prod_loc))
-            jif_strings.append(" <Class>{job_class}</Class>".format(job_class=choice(conv_dict['jobclass'][1])))
-            jif_strings.append(" <UserInfo1>{u1}</UserInfo1>".format(u1=choice(conv_dict['userinfo1'][1])))
-            jif_strings.append(" <UserInfo2>{u2}</UserInfo2>".format(u2=choice(conv_dict['userinfo2'][1])))
-            jif_strings.append(" <UserInfo3>{u3}</UserInfo3>".format(u3=choice(conv_dict['userinfo3'][1])))
-            jif_strings.append(" <UserInfo4>{u4}</UserInfo4>".format(u4=choice(conv_dict['userinfo4'][1])))
-            jif_strings.append(" <UserInfo5>{u5}</UserInfo5>".format(u5=choice(conv_dict['userinfo5'][1])))
+            jif_strings.append(" <ProcessingPhases>{}</ProcessingPhases>".format(self.proc_phase))
+            jif_strings.append(" <EndProcess>{}</EndProcess>".format(self.end_phase))
+            jif_strings.append(" <ProductionLocation>{}</ProductionLocation>".format(choice(conv_dict['prod_loc'][1])))
+            jif_strings.append(" <Class>{}</Class>".format(choice(conv_dict['jobclass'][1])))
+            jif_strings.append(" <EnvelopeID>{}</EnvelopeID>".format(choice(conv_dict['envelope_id'][1])))
+            jif_strings.append(" <StockID>{}</StockID>".format(choice(conv_dict['stock_id'][1])))
+            jif_strings.append(" <StockType>{}</StockType>".format(choice(conv_dict['stock_type'][1])))
+            jif_strings.append(" <UserInfo1>{}</UserInfo1>".format(choice(conv_dict['userinfo1'][1])))
+            jif_strings.append(" <UserInfo2>{}</UserInfo2>".format(choice(conv_dict['userinfo2'][1])))
+            jif_strings.append(" <UserInfo3>{}</UserInfo3>".format(choice(conv_dict['userinfo3'][1])))
+            jif_strings.append(" <UserInfo4>{}</UserInfo4>".format(choice(conv_dict['userinfo4'][1])))
+            jif_strings.append(" <UserInfo5>{}</UserInfo5>".format(choice(conv_dict['userinfo5'][1])))
             jif_strings.append("  <JobManifest>")
+            logger.debug('Building piece manifest.')
             for t in range(1, self.current_piececount + 1):
                 result = self.piece_builder(t)
                 jif_strings.append(result[0])
@@ -129,48 +151,51 @@ class JIFBuilder(Template):
             jif_strings.append(" <PageCount>{page_count}</PageCount>".format(page_count=(multi * scount)))
             jif_strings.append(" </JobTicket>\n")
             jstr = bstr.join(jif_strings)
-            filename = path.join(out_jif, self.site_prefix + self.id_to_str(self.current_jobid) + ".jif")
-            with open(filename, 'w') as fp:
-                fp.write(jstr)
-            fp.close()
-            if self.exit_data == 1:
-                if make_damages:
-                    if find_shift() == 1:
-                        self.gen_exit_data(create_damages=1, ops=choice(conv_dict['shift_1_ops'][1]))
-                    if find_shift() == 2:
-                        self.gen_exit_data(create_damages=1, ops=choice(conv_dict['shift_2_ops'][1]))
-                    if find_shift() == 3:
-                        self.gen_exit_data(create_damages=1, ops=choice(conv_dict['shift_3_ops'][1]))
-                else:
-                    if find_shift() == 1:
-                        self.gen_exit_data(ops=choice(conv_dict['shift_1_ops'][1]))
-                    if find_shift() == 2:
-                        self.gen_exit_data(ops=choice(conv_dict['shift_2_ops'][1]))
-                    if find_shift() == 3:
-                        self.gen_exit_data(ops=choice(conv_dict['shift_3_ops'][1]))
+            logger.debug('Generating ICD Data.')
+            if make_damages:
+                if find_shift() == 1:
+                    self.gen_exit_data(create_damages=1, ops=choice(conv_dict['shift_1_ops'][1]))
+                if find_shift() == 2:
+                    self.gen_exit_data(create_damages=1, ops=choice(conv_dict['shift_2_ops'][1]))
+                if find_shift() == 3:
+                    self.gen_exit_data(create_damages=1, ops=choice(conv_dict['shift_3_ops'][1]))
+            else:
+                if find_shift() == 1:
+                    self.gen_exit_data(ops=choice(conv_dict['shift_1_ops'][1]))
+                if find_shift() == 2:
+                    self.gen_exit_data(ops=choice(conv_dict['shift_2_ops'][1]))
+                if find_shift() == 3:
+                    self.gen_exit_data(ops=choice(conv_dict['shift_3_ops'][1]))
             self.current_jobid += 1
             self.generated_jobs += 1
             if self.generated_jobs == self.num_jifs:
+                logger.debug('Saving Job Seed')
                 self.jobid_saver()
+            filename = path.join(self.out, self.site_prefix + self.id_to_str(self.current_jobid) + ".jif")
+            with open(filename, 'w') as fp:
+                fp.write(jstr)
+            fp.close()
+            logger.debug('JIF creation completed. {}{} has been sent to APT.'.format(self.site_prefix,
+                                                                                     self.id_to_str(self.current_jobid)))
 
     def gen_feed_data(self, num_sheets=None, ops=None):
         out_str = "\n"
-        out_path = folder_construct(self.template_name)[1]
+        out_path = folder_construct()[2]
         sheet_strings = []
         job_string = self.site_prefix + str(self.current_jobid).zfill(7)
-        self.curr_feed_time = self.creation[1]
+        self.curr_time = self.creation[1]
 
         for i in range(1, self.current_piececount + 1):
             for t in range(1, num_sheets[i - 1] + 1):
-                if self.icd_mode:
+                if self.proc_phase == '10, 30':
                     sheet_strings.append("{jobid},{pieceid},{cur_sheet},"
                                          "{total_sheet},{time},"
                                          "{result},{op}".format(jobid=job_string, pieceid=str(i).zfill(6),
                                                                 cur_sheet=str(t).zfill(2),
                                                                 total_sheet=str(num_sheets[i - 1])
-                                                                .zfill(2), time=self.curr_feed_time,
+                                                                .zfill(2), time=self.curr_time,
                                                                 result='0', op=ops))
-                    self.curr_feed_time = self.add_seconds(self.curr_feed_time, 1)
+                    self.curr_time = self.add_seconds(self.curr_time, 1)
                 else:
                     sheet_strings.append("{jobid}{pieceid}{cur_sheet}{total_sheet}".format(jobid=job_string,
                                                                                            pieceid=str(i).zfill(6),
@@ -182,7 +207,7 @@ class JIFBuilder(Template):
         with open(filename, 'w') as fp:
             fp.write(out_str.join(sheet_strings) + '\n')
         fp.close()
-        self.curr_feed_time = None
+        self.curr_time = None
 
     def gen_exit_data(self, create_damages=0, ops=None):
         out_str = "\n"

@@ -1,50 +1,49 @@
 from os import path
 import datetime
 from django.shortcuts import get_object_or_404
+from ..models import JIFTemplate
 
 __author__ = 'venom'
 
 
 class Template(object):
-    def __init__(self, **kwargs):
+    def __init__(self):
+        jif = get_object_or_404(JIFTemplate, pk=1)
+        t = datetime.datetime.now() - datetime.timedelta(hours=3)
         self.initial_seed = '0000001'
-        self.site_prefix = kwargs['site_prefix']
-        self.template_name = kwargs['name']
-        self.piece_level = kwargs['piece_level']
-        self.var_pieces = kwargs['var_pieces']
-        self.piece_range = kwargs['piece_range']
-        self.var_sheets = kwargs['var_sheets']
-        self.sheet_range = kwargs['sheet_range']
-        self.num_jifs = kwargs['num_jifs']
-        self.job_id = kwargs['job_id']
-        self.account = kwargs['account']
-        self.job_name = kwargs['job_name']
-        self.job_type = kwargs['job_type']
-        self.num_pieces = kwargs['num_pieces']
-        self.num_sheets = kwargs['num_sheets']
-        self.creation = kwargs['creation']
-        self.deadline = kwargs['deadline']
-        self.proc_phase = kwargs['proc_phase']
-        self.end_phase = kwargs['end_phase']
-        self.prod_loc = kwargs['prod_loc']
-        self.feed_data = kwargs['feed_data']
-        self.exit_data = kwargs['exit_data']
-        self.damages = kwargs['damages']
-        self.userinfo1 = kwargs['userinfo1']
-        self.userinfo2 = kwargs['userinfo2']
-        self.userinfo3 = kwargs['userinfo3']
-        self.userinfo4 = kwargs['userinfo4']
-        self.userinfo5 = kwargs['userinfo5']
-        self.jobclass = kwargs['class']
-        self.imp_mult = kwargs['imp_mult']
-        self.icd_mode = kwargs['icd_mode']
-        self.feed_operators = kwargs['feed_ops']
-        self.exit_operators = kwargs['exit_ops']
-        self.replacements = kwargs['replacements']
+        self.site_prefix = None
+        self.job_id = '0000001'
+        self.template_name = jif.template_name
+        self.piece_range = jif.piece_range
+        self.sheet_range = '1, 20'
+        self.num_jifs = 1
+        self.account = jif.account_id
+        self.job_name = jif.job_name
+        self.job_type = jif.job_type
+        self.jobclass = jif.job_class
+        self.job_number = jif.job_number
+        self.envelope_id = jif.envelope_id
+        self.stock_id = jif.stock_id
+        self.stock_type = jif.stock_type
+        self.prod_loc = jif.production_location
+        self.product_name = jif.product_name
+        self.userinfo1 = jif.user_info_1
+        self.userinfo2 = jif.user_info_2
+        self.userinfo3 = jif.user_info_3
+        self.userinfo4 = jif.user_info_4
+        self.userinfo5 = jif.user_info_5
+        self.contact_email = jif.contact_email
+        self.imp_mult = '1,2,4'
+        self.shift_1_operators = jif.shift_1_operators
+        self.shift_2_operators = jif.shift_2_operators
+        self.shift_3_operators = jif.shift_3_operators
+        self.creation = [str(t), t]
+        self.deadline = ''
         self.current_jobid = None
         self.current_piececount = None
+        self.damages = None
         self.generated_jobs = None
-        self.curr_feed_time = None
+        self.curr_time = None
         self.curr_exit_time = None
         self.damage_count = 0
         self.current_bad = 0
@@ -87,6 +86,4 @@ class Template(object):
             fp.close()
 
     def add_seconds(self, in_time, secs):
-        fulldate = in_time
-        newtime = fulldate + datetime.timedelta(seconds=secs)
-        return newtime
+        return in_time + datetime.timedelta(seconds=secs)
