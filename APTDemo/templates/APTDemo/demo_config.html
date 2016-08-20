@@ -1,9 +1,25 @@
 {% extends 'APTDemo/base.html' %}
 
 {% block content %}
-<h1>Demo Configuration</h1>
-    <form method="POST" class="post-form">{% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit" class="save btn btn-default">Save</button>
+<h1 style="text-align: center">Demo Configuration</h1>
+    <form method="POST" class="post-form">
+        {% csrf_token %}
+        <table class="table-bordered center-table">
+            <thead>
+            <tr>
+                <td>Field</td>
+                <td>Value</td>
+            </tr>
+            </thead>
+            <tbody>
+            {% for field in form %}
+            <tr>
+                <td>{{ field.label_tag }}</td>
+                <td style="color:#000;">{{ field }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <h1 style="text-align: center"><button type="submit" class="btn btn-primary btn-md" >Save Configuration</button></h1>
     </form>
 {% endblock %}

@@ -1,5 +1,26 @@
 {% extends 'APTDemo/base.html' %}
 
 {% block content %}
-<h1>Demo Controls</h1>
+<h1 style="text-align: center">JIF Configuration</h1>
+    <form method="POST" class="post-form">
+        {% csrf_token %}
+        <table class="table-bordered center-table">
+            <thead>
+            <tr>
+                <td>Field</td>
+                <td>Value</td>
+            </tr>
+            </thead>
+            <tbody>
+            {% for field in form %}
+            <tr>
+                <td>{{ field.label_tag }}</td>
+                <td style="color:#000;">{{ field }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <h1 style="text-align: center"><button type="submit" class="btn btn-primary btn-md" >Save Configuration</button></h1>
+    <p style="text-align: center">Last Modified: {{ jif.template_date }}</p>
+    </form>
 {% endblock %}

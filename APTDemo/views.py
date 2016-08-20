@@ -1,7 +1,7 @@
 from automated_APTDemo import logging_setup
 from django.shortcuts import render, get_object_or_404, redirect
 from .controller import DemoController
-from .models import DemoConfig
+from .models import DemoConfig, JIFTemplate
 from .forms import DemoConfigForm, JIFTemplateForm
 
 logger = logging_setup.init_logging()
@@ -29,3 +29,16 @@ def demo_config(request):
     else:
         form = DemoConfigForm(instance=demo)
     return render(request, 'APTDemo/demo_config.html', {'form': form})
+
+
+def jif_config(request):
+    jif = get_object_or_404(JIFTemplate, pk=1)
+    if request.method == "POST":
+        form = JIFTemplateForm(request.POST, instance=jif)
+        if form.is_valid():
+            jif = form.save(commit=False)
+            jif.save()
+            return redirect('jif_config', pk=jif.pk)
+    else:
+        form = JIFTemplateForm(instance=jif)
+    return render(request, 'APTDemo/jif_config.html', {'form': form, 'jif': jif})
