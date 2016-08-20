@@ -16,6 +16,10 @@ class FolderHandler(PatternMatchingEventHandler):
     reprint_pattern = ['*.txt']
     proc_xml_pattern = ['*.xml']
 
+    def __init__(self, controller):
+        super().__init__()
+        self.master = controller
+
     def process(self, event):
         """
         event.event_type
@@ -25,18 +29,20 @@ class FolderHandler(PatternMatchingEventHandler):
         event.src_path
             path/to/observed/file
         """
-        # the file will be processed here
-        exit_folder = "C:\\Users\\trogers\\PycharmProjects\\StandaloneJIF\\output\\Testing_8_17\\exit_data"
-        print(event.src_path, event.event_type)
+        logger.debug('{}{}'.format(event.src_path, event.event_type))
         filename = str(event.src_path).split('\\')[-1]
         if 'accepted' in filename.split('.'):
             print('JIF {} accepted, proceeding...'.format(filename.split('.')[0]))
             exit_name = 'exit_{}.txt'.format(filename.split('.')[0])
-            if os.path.exists(os.path.join(exit_folder, exit_name)):
+            if os.path.exists(os.path.join(self.master.datafolder, exit_name)):
                 print('Exit data exists, copying!')
-                shutil.copy(os.path.join(exit_folder, exit_name),
+                shutil.copy(os.path.join(self.master.datafolder, exit_name),
                             os.path.join('C:\\APTApplication\\ICD\\TDInput', exit_name))
                 print('Trackdevice should be running now!')
+        if 'txt' in filename.split('.'):
+            pass
+        if 'xml' in filename.split('.'):
+            pass
 
     def on_modified(self, event):
         self.process(event)
