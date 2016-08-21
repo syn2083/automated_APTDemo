@@ -26,7 +26,6 @@ def demo_config(request):
         if form.is_valid():
             demo = form.save(commit=False)
             demo.save()
-            return redirect('demo_config', pk=demo.pk)
     else:
         form = DemoConfigForm(instance=demo)
     return render(request, 'APTDemo/demo_config.html', {'form': form})
@@ -39,7 +38,6 @@ def jif_config(request):
         if form.is_valid():
             jif = form.save(commit=False)
             jif.save()
-            return redirect('jif_config', pk=jif.pk)
     else:
         form = JIFTemplateForm(instance=jif)
     return render(request, 'APTDemo/jif_config.html', {'form': form, 'jif': jif})
