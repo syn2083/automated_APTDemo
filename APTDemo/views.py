@@ -3,14 +3,15 @@ from django.shortcuts import render, get_object_or_404, redirect
 from .controller import DemoController
 from .models import DemoConfig, JIFTemplate
 from .forms import DemoConfigForm, JIFTemplateForm
+from django.views.decorators.csrf import csrf_exempt
 
 logger = logging_setup.init_logging()
 
 
 def demo_central(request):
-    demo = get_object_or_404(DemoConfig, pk=1)
-    s = DemoController()
-    s.create_workers(jif_acks_path=demo.jif_acks_path, reprint_path=demo.reprint_path, proc_path=demo.proc_phase_path)
+    # demo = get_object_or_404(DemoConfig, pk=1)
+    # s = DemoController()
+    # s.create_workers(jif_acks_path=demo.jif_acks_path, reprint_path=demo.reprint_path, proc_path=demo.proc_phase_path)
     return render(request, 'APTDemo/demo_central.html', {})
 
 
@@ -42,3 +43,11 @@ def jif_config(request):
     else:
         form = JIFTemplateForm(instance=jif)
     return render(request, 'APTDemo/jif_config.html', {'form': form, 'jif': jif})
+
+
+@csrf_exempt
+def job_accepted(request):
+    if request.method == "POST":
+        x = request.readlines()
+        logger.debug(x[0].decode('utf-8'))
+    return render(request, 'APTDemo/job_accepted.html', {})
