@@ -1,4 +1,5 @@
-from random import choice, randint
+import datetime
+from random import choice, randint, sample
 from os import path
 from .jif_templater import Template
 from .prog_utilities import folder_construct, str_to_list, find_shift
@@ -26,30 +27,31 @@ class JIFBuilder(Template):
         super().__init__()
         self.out = jdf_folder
         demo = get_object_or_404(DemoConfig, pk=1)
+        self.multi_step = demo.idc_1_multi
         if icd_target == 'icd_1':
             self.site_prefix = 'A10'
             self.proc_phase = '10, 30'
             self.end_phase = '30'
-            self.p_speed = ((demo.idc_1_time // 60) // 60)
-            self.i_speed = None
+            self.piece_or_sheet = demo.idc_1_ps
+            self.speed = ((demo.idc_1_time // 60) // 60)
         if icd_target == 'icd_2':
             self.site_prefix = 'A20'
             self.proc_phase = '20'
             self.end_phase = '20'
-            self.p_speed = ((demo.idc_2_time // 60) // 60)
-            self.i_speed = None
+            self.piece_or_sheet = demo.idc_2_ps
+            self.speed = ((demo.idc_2_time // 60) // 60)
         if icd_target == 'icd_3':
             self.site_prefix = 'A30'
             self.proc_phase = '30'
             self.end_phase = '30'
-            self.p_speed = None
-            self.i_speed = ((demo.idc_3_time // 60) // 60)
+            self.piece_or_sheet = demo.idc_3_ps
+            self.speed = ((demo.idc_3_time // 60) // 60)
         if icd_target == 'td':
             self.site_prefix = 'A40'
             self.proc_phase = '30'
             self.end_phase = '30'
-            self.p_speed = None
-            self.i_speed = None
+            self.piece_or_sheet = 'piece'
+            self.p_speed = 1
         self.r_speed = ((demo.idc_4_time // 60) // 60)
 
     def piece_builder(self, piece_id):
@@ -184,26 +186,40 @@ class JIFBuilder(Template):
         sheet_strings = []
         job_string = self.site_prefix + str(self.current_jobid).zfill(7)
         self.curr_time = self.creation[1]
+        sheet_count = 0
+        damage_list = []
 
-        for i in range(1, self.current_piececount + 1):
-            for t in range(1, num_sheets[i - 1] + 1):
-                if self.proc_phase == '10, 30':
-                    sheet_strings.append("{jobid},{pieceid},{cur_sheet},"
-                                         "{total_sheet},{time},"
-                                         "{result},{op}".format(jobid=job_string, pieceid=str(i).zfill(6),
-                                                                cur_sheet=str(t).zfill(2),
-                                                                total_sheet=str(num_sheets[i - 1])
-                                                                .zfill(2), time=self.curr_time,
-                                                                result='0', op=ops))
+        if self.damages:
+            damage_list = sample(range(1, self.current_piececount), choice([10, 15, 25, 50]))
+
+        for n, i in enumerate(range(1, self.current_piececount + 1)):
+            if 'piece' in self.piece_or_sheet.lower():
+                if n % self.speed == 0:
                     self.curr_time = self.add_seconds(self.curr_time, 1)
+            for t in range(1, num_sheets[i - 1] + 1):
+                if i in damage_list:
+                    sheet_strings.append("{jobid},{pieceid},{cur_sheet},{total_sheet},{time},"
+                                         "{result},{op}".format(jobid=job_string,
+                                                                pieceid=str(i).zfill(6),
+                                                                cur_sheet=str(t).zfill(2),
+                                                                total_sheet=str(num_sheets[i - 1]).zfill(2),
+                                                                time=self.curr_time,
+                                                                result=choice(['1', '2']),
+                                                                op=ops))
                 else:
-                    sheet_strings.append("{jobid}{pieceid}{cur_sheet}{total_sheet}".format(jobid=job_string,
-                                                                                           pieceid=str(i).zfill(6),
-                                                                                           cur_sheet=str(t).zfill(2),
-                                                                                           total_sheet=str
-                                                                                           (num_sheets[i - 1])
-                                                                                           .zfill(2)))
-        filename = path.join(out_path, "feed_" + job_string + ".txt")
+                    sheet_strings.append("{jobid},{pieceid},{cur_sheet},{total_sheet},{time},"
+                                         "{result},{op}".format(jobid=job_string,
+                                                                pieceid=str(i).zfill(6),
+                                                                cur_sheet=str(t).zfill(2),
+                                                                total_sheet=str(num_sheets[i - 1]).zfill(2),
+                                                                time=self.curr_time,
+                                                                result='0',
+                                                                op=ops))
+                if 'sheet' in self.piece_or_sheet.lower():
+                    sheet_count += 1
+                    if sheet_count % self.speed == 0:
+                        self.curr_time = self.add_seconds(self.curr_time, 1)
+        filename = path.join(out_path, "sheet_" + job_string + ".txt")
         with open(filename, 'w') as fp:
             fp.write(out_str.join(sheet_strings) + '\n')
         fp.close()
@@ -212,13 +228,16 @@ class JIFBuilder(Template):
     def gen_exit_data(self, create_damages=0, ops=None):
         out_str = "\n"
         repr_str = "\n"
-        out_path = folder_construct(self.template_name)[2]
+        out_path = folder_construct()[2]
         piece_strings = []
         reprint_strings = []
         job_string = self.site_prefix + str(self.current_jobid).zfill(7)
         dc = 0
         current_damages = 0
-        self.curr_exit_time = self.creation[1]
+        if self.multi_step == 1:
+            self.curr_time = self.creation[1] + datetime.timedelta(hours=2)
+        else:
+            self.curr_exit_time = self.creation[1]
 
         if create_damages:
             dc = randint(5, 20)
