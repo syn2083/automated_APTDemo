@@ -1,8 +1,8 @@
-import threading
-import time
+import os
+from collections import deque
 from . import settings
-from .folder_monitor import folder_monitor_handler as fmh
 from automated_APTDemo.logging_setup import init_logging
+from .jifgenerator import jif_assembler
 
 """
 This is the Demo Controller Brain.
@@ -11,9 +11,10 @@ logger = init_logging()
 
 
 class DemoController:
-    def __init__(self):
+    def __init__(self, jdf_folder):
         self.demo_status = 0
         self.icd_1 = []
+        self.icd_1_multi = True
         self.icd_2 = []
         self.icd_3 = []
         self.icd_4 = []
@@ -21,8 +22,7 @@ class DemoController:
         self.reprint_jobs = {}
         self.completed_jobs = []
         self.data_folder = settings.EXIT_DIR
-        self.jif_folder = settings.JIF_DIR
-        self.monitor_threads = {'jif_observer': None, 'reprint_observer': None, 'proc_observer': None, 'holder': None}
+        self.jif_folder = jdf_folder
         self.first_run = 1
 
     def __repr__(self):
@@ -39,32 +39,45 @@ class DemoController:
     def add_job(self, jobid=None):
         pass
 
-    def observer_thread(self):
-        try:
-            time.sleep(1)
-        except SystemExit:
-            self.monitor_threads['jif_observer'].stop()
-            self.monitor_threads['reprint_observer'].stop()
-            self.monitor_threads['proc_observer'].stop()
-        self.monitor_threads['jif_observer'].join()
-        self.monitor_threads['reprint_observer'].join()
-        self.monitor_threads['proc_observer'].join()
+    def start_demo(self):
+        # clean up any outstanding exit data
+        files = os.listdir(self.data_folder)
+        logger.debug('Demo Start called, cleaning exit directory.')
+        for file in files:
+            os.remove(self.data_folder + '/' + file )
+        self.first_run = 0
+        logger.debug('Setting demo status to 1, starting Demo.')
+        self.demo_status = 1
+        icd_1 = jif_assembler.JIFBuilder('icd_1', self.jif_folder)
+        logger.debug('Creating ICD 1 JIF/Exit Data')
+        icd_1.gen_jifs()
+        icd_2 = jif_assembler.JIFBuilder('icd_2', self.jif_folder)
+        logger.debug('Creating ICD 2 JIF/Exit Data')
+        icd_2.gen_jifs()
+        icd_3 = jif_assembler.JIFBuilder('icd_3', self.jif_folder)
+        logger.debug('Creating ICD 3 JIF/Exit Data')
+        icd_3.gen_jifs()
+        td = jif_assembler.JIFBuilder('td', self.jif_folder)
+        logger.debug('Creating Initial TD JIF/Exit Data')
+        td.gen_jifs()
+        logger.debug('Demo Initialized.')
+        return 'Demo initialization and startup complete.'
 
-    def create_workers(self, jif_acks_path=None, reprint_path=None, proc_path=None,):
-        logger.debug('Setting up monitor workers')
-        jif_observer = fmh.Observer()
-        self.monitor_threads['jif_observer'] = jif_observer
-        jif_observer.schedule(fmh.FolderHandler(self), path='{}'.format(jif_acks_path))
-        jif_observer.start()
-        reprint_observer = fmh.Observer()
-        self.monitor_threads['reprint_observer'] = reprint_observer
-        reprint_observer.schedule(fmh.FolderHandler(self), path='{}'.format(reprint_path))
-        reprint_observer.start()
-        proc_observer = fmh.Observer()
-        self.monitor_threads['proc_observer'] = proc_observer
-        proc_observer.schedule(fmh.FolderHandler(self), path='{}'.format(proc_path))
-        proc_observer.start()
-        t = threading.Thread(target=self.observer_thread)
-        self.monitor_threads['holder'] = t
-        t.start()
+    def stop_demo(self):
+        logger.debug('Setting demo status to 0, stopping demo.')
+        self.demo_status = 0
+        self.icd_1 = []
+        self.icd_2 = []
+        self.icd_3 = []
+        self.icd_4 = []
+        self.td = []
+        # clean up exit data
+        files = os.listdir(self.data_folder)
+        logger.debug('Cleaning exit directory.')
+        for file in files:
+            os.remove(self.data_folder + '/' + file)
+        logger.debug('Resetting demo state')
+        self.first_run = 1
+        return 'Demo shut down complete.'
+
 

@@ -184,6 +184,7 @@ class JIFBuilder(Template):
         out_str = "\n"
         out_path = folder_construct()[2]
         sheet_strings = []
+        reprint_string = []
         job_string = self.site_prefix + str(self.current_jobid).zfill(7)
         self.curr_time = self.creation[1]
         sheet_count = 0
@@ -204,8 +205,18 @@ class JIFBuilder(Template):
                                                                 cur_sheet=str(t).zfill(2),
                                                                 total_sheet=str(num_sheets[i - 1]).zfill(2),
                                                                 time=self.curr_time,
-                                                                result=choice(['1', '2']),
+                                                                result='1',
                                                                 op=ops))
+                    if self.multi_step == 1:
+                        reprint_string.append("{jobid},{pieceid},{cur_sheet},{total_sheet},{time},"
+                                              "{result},{op}".format(jobid=job_string,
+                                                                     pieceid=str(i).zfill(6),
+                                                                     cur_sheet=str(t).zfill(2),
+                                                                     total_sheet=str(num_sheets[i - 1]).zfill(2),
+                                                                     time=self.curr_time + datetime.timedelta(hours=2),
+                                                                     result='0',
+                                                                     op=ops))
+
                 else:
                     sheet_strings.append("{jobid},{pieceid},{cur_sheet},{total_sheet},{time},"
                                          "{result},{op}".format(jobid=job_string,
@@ -224,6 +235,7 @@ class JIFBuilder(Template):
             fp.write(out_str.join(sheet_strings) + '\n')
         fp.close()
         self.curr_time = None
+        return damage_list, reprint_string
 
     def gen_exit_data(self, create_damages=0, ops=None):
         out_str = "\n"
@@ -284,6 +296,29 @@ class JIFBuilder(Template):
             fp.write(out_str.join(piece_strings) + '\n')
         fp.close()
         self.curr_exit_time = None
+
+    def gen_reprints(self, damage_list, ops):
+        out_str = "\n"
+        out_path = folder_construct()[2]
+        reprint_strings = []
+        self.curr_time = self.creation + datetime.timedelta(hours=2)
+        job_string = self.site_prefix + str(self.current_jobid).zfill(7)
+
+        for i in damage_list:
+            reprint_strings.append("{jobid},{pieceid},{time},{result},{op}".format(jobid=job_string,
+                                                                                   pieceid=str(i).zfill(6),
+                                                                                   time=self.curr_time,
+                                                                                   result='0', op=ops))
+            if i % 2 == 0:
+                self.curr_time = self.add_seconds(self.curr_time, 1)
+
+        filename = path.join(out_path, "reprint_" + job_string + ".txt")
+        with open(filename, 'w') as fp:
+            fp.write(out_str.join(reprint_strings) + '\n')
+        fp.close()
+        self.curr_time = None
+
+
 
     def __repr__(self):
         return "<BaseJIF(template_name='%s', piece_level='%s', num_jifs='%s')>" % \

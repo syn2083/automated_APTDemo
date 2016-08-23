@@ -1,5 +1,5 @@
 import django.http
-
+import json
 from automated_APTDemo import logging_setup
 from django.shortcuts import render, get_object_or_404, redirect, render_to_response
 from .controller import DemoController
@@ -10,7 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.template import RequestContext
 
 logger = logging_setup.init_logging()
-control = DemoController()
+control = DemoController(get_object_or_404(DemoConfig, pk=1).jdf_input_path)
 
 
 def demo_central(request):
@@ -30,8 +30,10 @@ def demo_controls(request):
 
 
 def start_demo(request):
-    control.demo_status = 1
-    return django.http.HttpResponse('Started')
+    reply = control.start_demo()
+    reply_dict = {'server_message': reply, 'demo_status': control}
+    json_reply = json.dumps(reply_dict)
+    return django.http.HttpResponse(json_reply)
 
 
 def stop_demo(request):
