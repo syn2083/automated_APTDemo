@@ -39,6 +39,23 @@ class DemoController:
     def add_job(self, jobid=None):
         pass
 
+    def multi_job(self, jobid=None):
+        if not jobid:
+            logger.debug('Multi-job processor called with no jobid.')
+        if not self.icd_1_multi:
+            pass
+        if jobid in self.icd_1:
+            if self.td:
+                logger.debug('Multi-job passing to TD but it is busy.')
+                # will try to add, and let next step handle this situation
+                self.td.append(jobid)
+            else:
+                self.td.append(jobid)
+
+
+    def reprint_request(self, jobid=None):
+        pass
+
     def start_demo(self):
         # clean up any outstanding exit data
         files = os.listdir(self.data_folder)

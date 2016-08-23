@@ -4,8 +4,7 @@
 // Submit post on submit
 $('#start').click(function() {
 $.get('/start_demo/', function(data){
-    $('#demo_status').html(data['demo_status']);
-    $('#server_message').html(data['server_message']);
+    $('#demo_status').html(data);
 });
 });
 $('#stop').click(function() {

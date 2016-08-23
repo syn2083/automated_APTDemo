@@ -1,5 +1,4 @@
 import django.http
-import json
 from automated_APTDemo import logging_setup
 from django.shortcuts import render, get_object_or_404, redirect, render_to_response
 from .controller import DemoController
@@ -30,15 +29,17 @@ def demo_controls(request):
 
 
 def start_demo(request):
-    reply = control.start_demo()
-    reply_dict = {'server_message': reply, 'demo_status': control}
-    json_reply = json.dumps(reply_dict)
-    return django.http.HttpResponse(json_reply)
+    logger.debug('Start demo request.')
+    # reply = control.start_demo()
+    reply = 'Started'
+    control.demo_status = 1
+    return django.http.HttpResponse(reply)
 
 
 def stop_demo(request):
-    control.demo_status = 0
-    return django.http.HttpResponse('Stopped')
+    logger.debug('Stop demo request.')
+    reply = control.stop_demo()
+    return django.http.HttpResponse(reply)
 
 
 def demo_config(request):
