@@ -9,7 +9,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.template import RequestContext
 
 logger = logging_setup.init_logging()
-control = DemoController(get_object_or_404(DemoConfig, pk=1).jdf_input_path)
+
+demo_conf = get_object_or_404(DemoConfig, pk=1)
+icd_folders = [demo_conf.idc_1_path, demo_conf.idc_2_path, demo_conf.idc_3_path,
+               demo_conf.idc_4_path, demo_conf.td_multi_path]
+control = DemoController(demo_conf.jdf_input_path, icd_folders)
 
 
 def demo_central(request):
@@ -29,9 +33,9 @@ def demo_controls(request):
 
 
 def start_demo(request):
+    demo_conf = get_object_or_404(DemoConfig, pk=1)
     logger.debug('Start demo request.')
-    # reply = control.start_demo()
-    reply = 'Started'
+    reply = control.start_demo()
     control.demo_status = 1
     return django.http.HttpResponse(reply)
 
@@ -72,6 +76,8 @@ def job_accepted(request):
     if request.method == "POST":
         x = request.readlines()
         logger.debug(x[0].decode('utf-8'))
+        t = x[0].decode('utf-8')
+        control.new_job(t)
     return render(request, 'APTDemo/job_accepted.html', {})
 
 
@@ -80,6 +86,8 @@ def reprint_sent(request):
     if request.method == "POST":
         x = request.readlines()
         logger.debug(x[0].decode('utf-8'))
+        t = x[0].decode('utf-8')
+        control.reprint_job(t)
     return render(request, 'APTDemo/reprint_sent.html', {})
 
 
@@ -88,6 +96,8 @@ def proc_phase(request):
     if request.method == "POST":
         x = request.readlines()
         logger.debug(x[0].decode('utf-8'))
+        t = x[0].decode('utf-8')
+        control.proc_phase(t)
     return render(request, 'APTDemo/proc_phase.html', {})
 
 
@@ -96,4 +106,6 @@ def job_complete(request):
     if request.method == "POST":
         x = request.readlines()
         logger.debug(x[0].decode('utf-8'))
+        t = x[0].decode('utf-8')
+        control.complete_job(t)
     return render(request, 'APTDemo/job_complete.html', {})

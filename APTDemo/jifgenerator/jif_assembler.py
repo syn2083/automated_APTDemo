@@ -23,11 +23,12 @@ logger = logging_setup.init_logging()
 
 
 class JIFBuilder(Template):
-    def __init__(self, icd_target, jdf_folder):
+    def __init__(self, icd_target, jdf_folder, multi_step):
         super().__init__()
         self.out = jdf_folder
         demo = get_object_or_404(DemoConfig, pk=1)
-        self.multi_step = demo.idc_1_multi
+        self.target = icd_target
+        self.multi_step = multi_step
         if icd_target == 'icd_1':
             self.site_prefix = 'A10'
             self.proc_phase = '10, 30'
@@ -51,8 +52,8 @@ class JIFBuilder(Template):
             self.proc_phase = '30'
             self.end_phase = '30'
             self.piece_or_sheet = 'piece'
-            self.p_speed = 1
-        self.r_speed = ((demo.idc_4_time // 60) // 60)
+            self.speed = 1
+        self.r_speed = 2
 
     def piece_builder(self, piece_id):
         plist = []
@@ -70,8 +71,7 @@ class JIFBuilder(Template):
         bstr = "\n"
         make_damages = 0
 
-        if not self.current_jobid:
-            self.jobid_loader()
+        self.jobid_loader()
         logger.debug('Starting to build JIF {}{}.'.format(self.site_prefix, self.id_to_str(self.current_jobid)))
         conv_dict = {'job_type': [self.job_type, None],
                      'job_name': [self.job_name, None],
@@ -153,45 +153,61 @@ class JIFBuilder(Template):
             jif_strings.append(" <PageCount>{page_count}</PageCount>".format(page_count=(multi * scount)))
             jif_strings.append(" </JobTicket>\n")
             jstr = bstr.join(jif_strings)
+
             logger.debug('Generating ICD Data.')
-            if make_damages:
-                if find_shift() == 1:
-                    self.gen_exit_data(create_damages=1, ops=choice(conv_dict['shift_1_ops'][1]))
-                if find_shift() == 2:
-                    self.gen_exit_data(create_damages=1, ops=choice(conv_dict['shift_2_ops'][1]))
-                if find_shift() == 3:
-                    self.gen_exit_data(create_damages=1, ops=choice(conv_dict['shift_3_ops'][1]))
-            else:
-                if find_shift() == 1:
-                    self.gen_exit_data(ops=choice(conv_dict['shift_1_ops'][1]))
-                if find_shift() == 2:
-                    self.gen_exit_data(ops=choice(conv_dict['shift_2_ops'][1]))
-                if find_shift() == 3:
-                    self.gen_exit_data(ops=choice(conv_dict['shift_3_ops'][1]))
+
+            if self.piece_or_sheet.lower() == 'sheet':
+                if self.multi_step:
+                    if make_damages:
+                        sheet_reprints = self.gen_sheet_data(create_damages=1, num_sheets=sheet_list, ops=conv_dict)
+                        piece_reprints = self.gen_piece_data(create_damages=1, ops=conv_dict)
+                        reprint_set = set()
+                        reprint_set.update(sheet_reprints)
+                        reprint_set.update(piece_reprints)
+                        self.gen_reprints(reprint_set, conv_dict)
+                    else:
+                        self.gen_sheet_data(create_damages=0, num_sheets=sheet_list, ops=conv_dict)
+                        self.gen_piece_data(create_damages=0, ops=conv_dict)
+                if make_damages:
+                    self.gen_sheet_data(create_damages=1, num_sheets=sheet_list, ops=conv_dict)
+            if self.piece_or_sheet.lower() == 'piece':
+                if make_damages:
+                    piece_reprints = self.gen_piece_data(create_damages=1, ops=conv_dict)
+                    self.gen_reprints(piece_reprints, conv_dict)
+                else:
+                    self.gen_piece_data(ops=conv_dict)
+
+            present_jobid = '{}{}'.format(self.site_prefix, str(self.current_jobid).zfill(7))
             self.current_jobid += 1
             self.generated_jobs += 1
-            if self.generated_jobs == self.num_jifs:
-                logger.debug('Saving Job Seed')
-                self.jobid_saver()
+            logger.debug('Saving Job Seed')
+            self.jobid_saver()
             filename = path.join(self.out, self.site_prefix + self.id_to_str(self.current_jobid) + ".jif")
             with open(filename, 'w') as fp:
                 fp.write(jstr)
             fp.close()
-            logger.debug('JIF creation completed. {}{} has been sent to APT.'.format(self.site_prefix,
-                                                                                     self.id_to_str(self.current_jobid)))
+            logger.debug('JIF creation completed. {} has been sent to APT.'.format(present_jobid))
+            return present_jobid
 
-    def gen_feed_data(self, num_sheets=None, ops=None):
+    def gen_sheet_data(self, create_damages=None, num_sheets=None, ops=None):
         out_str = "\n"
         out_path = folder_construct()[2]
         sheet_strings = []
-        reprint_string = []
         job_string = self.site_prefix + str(self.current_jobid).zfill(7)
         self.curr_time = self.creation[1]
         sheet_count = 0
         damage_list = []
+        operator = None
 
-        if self.damages:
-            damage_list = sample(range(1, self.current_piececount), choice([10, 15, 25, 50]))
+        if find_shift() == 1:
+            operator = choice(ops['shift_1_ops'][1])
+        if find_shift() == 2:
+            operator = choice(ops['shift_2_ops'][1])
+        if find_shift() == 3:
+            operator = choice(ops['shift_3_ops'][1])
+
+        if create_damages:
+            damage_list = sample(range(1, self.current_piececount), choice([1, 5, 10, 15, 20, 25]))
 
         for n, i in enumerate(range(1, self.current_piececount + 1)):
             if 'piece' in self.piece_or_sheet.lower():
@@ -206,17 +222,7 @@ class JIFBuilder(Template):
                                                                 total_sheet=str(num_sheets[i - 1]).zfill(2),
                                                                 time=self.curr_time,
                                                                 result='1',
-                                                                op=ops))
-                    if self.multi_step == 1:
-                        reprint_string.append("{jobid},{pieceid},{cur_sheet},{total_sheet},{time},"
-                                              "{result},{op}".format(jobid=job_string,
-                                                                     pieceid=str(i).zfill(6),
-                                                                     cur_sheet=str(t).zfill(2),
-                                                                     total_sheet=str(num_sheets[i - 1]).zfill(2),
-                                                                     time=self.curr_time + datetime.timedelta(hours=2),
-                                                                     result='0',
-                                                                     op=ops))
-
+                                                                op=operator))
                 else:
                     sheet_strings.append("{jobid},{pieceid},{cur_sheet},{total_sheet},{time},"
                                          "{result},{op}".format(jobid=job_string,
@@ -225,83 +231,81 @@ class JIFBuilder(Template):
                                                                 total_sheet=str(num_sheets[i - 1]).zfill(2),
                                                                 time=self.curr_time,
                                                                 result='0',
-                                                                op=ops))
+                                                                op=operator))
                 if 'sheet' in self.piece_or_sheet.lower():
                     sheet_count += 1
                     if sheet_count % self.speed == 0:
                         self.curr_time = self.add_seconds(self.curr_time, 1)
+
         filename = path.join(out_path, "sheet_" + job_string + ".txt")
+        logger.debug('Writing Sheet File.')
         with open(filename, 'w') as fp:
             fp.write(out_str.join(sheet_strings) + '\n')
         fp.close()
         self.curr_time = None
-        return damage_list, reprint_string
+        return damage_list
 
-    def gen_exit_data(self, create_damages=0, ops=None):
+    def gen_piece_data(self, create_damages=0, ops=None):
         out_str = "\n"
-        repr_str = "\n"
         out_path = folder_construct()[2]
         piece_strings = []
-        reprint_strings = []
         job_string = self.site_prefix + str(self.current_jobid).zfill(7)
-        dc = 0
-        current_damages = 0
+        damage_list = []
+        operator = None
+
         if self.multi_step == 1:
-            self.curr_time = self.creation[1] + datetime.timedelta(hours=2)
+            self.curr_time = self.creation[1] + datetime.timedelta(hours=1)
         else:
-            self.curr_exit_time = self.creation[1]
+            self.curr_time = self.creation[1]
+
+        if find_shift() == 1:
+            operator = choice(ops['shift_1_ops'][1])
+        if find_shift() == 2:
+            operator = choice(ops['shift_2_ops'][1])
+        if find_shift() == 3:
+            operator = choice(ops['shift_3_ops'][1])
 
         if create_damages:
-            dc = randint(5, 20)
+            if create_damages:
+                damage_list = sample(range(1, self.current_piececount), choice([1, 5, 10, 15, 20, 25]))
 
         for i in range(1, self.current_piececount + 1):
-            if create_damages:
-                if 5 <= randint(1, 10) and current_damages <= dc:
-                    current_damages += 1
-                    if self.icd_mode:
-                        piece_strings.append("{jobid},{pieceid},"
-                                             "{time},{result},{op}".format(jobid=job_string, pieceid=str(i).zfill(6),
-                                                                           time=self.curr_exit_time, result='1', op=ops))
-                        reprint_strings.append("{jobid},{pieceid},"
-                                               "{time},{result},{op}".format(jobid=job_string, pieceid=str(i).zfill(6),
-                                                                             time=self.curr_exit_time, result='0', op=ops))
-                        self.curr_exit_time = self.add_seconds(self.curr_exit_time, 1)
+            if i in damage_list:
+                if self.multi_step or self.target.lower() == 'td':
+                    if 5 <= randint(1, 10):
+                        piece_strings.append('')
                     else:
-                        reprint_strings.append("{jobid}{pieceid}".format(jobid=job_string, pieceid=str(i).zfill(6)))
+                        pass
                 else:
-                    if self.icd_mode:
-                        piece_strings.append("{jobid},{pieceid},"
-                                             "{time},{result},{op}".format(jobid=job_string, pieceid=str(i).zfill(6),
-                                                                           time=self.curr_exit_time, result='0', op=ops))
-                        self.curr_exit_time = self.add_seconds(self.curr_exit_time, 1)
-                    else:
-                        piece_strings.append("{jobid}{pieceid}".format(jobid=job_string, pieceid=str(i).zfill(6)))
+                    piece_strings.append("{jobid},{pieceid},{time},{result},{op}".format(jobid=job_string,
+                                                                                         pieceid=str(i).zfill(6),
+                                                                                         time=self.curr_time,
+                                                                                         result=choice(['1', '2']),
+                                                                                         op=operator))
+                if i % self.speed == 0:
+                    self.curr_time = self.add_seconds(self.curr_time, 1)
             else:
-                if self.icd_mode:
-                    piece_strings.append("{jobid},{pieceid},"
-                                         "{time},{result},{op}".format(jobid=job_string, pieceid=str(i).zfill(6),
-                                                                       time=self.curr_exit_time, result='0', op=ops))
-                    self.curr_exit_time = self.add_seconds(self.curr_exit_time, 1)
-                else:
-                    piece_strings.append("{jobid}{pieceid}".format(jobid=job_string, pieceid=str(i).zfill(6)))
+                piece_strings.append("{jobid},{pieceid},{time},{result},{op}".format(jobid=job_string,
+                                                                                     pieceid=str(i).zfill(6),
+                                                                                     time=self.curr_time,
+                                                                                     result='0',
+                                                                                     op=operator))
+                if i % self.speed == 0:
+                    self.curr_time = self.add_seconds(self.curr_time, 1)
 
-        if create_damages:
-            reprint_filename = path.join(out_path, "reprint_" + job_string + ".txt")
-            with open(reprint_filename, 'w') as fp:
-                fp.write(repr_str.join(reprint_strings) + '\n')
-            fp.close()
-
-        filename = path.join(out_path, "exit_" + job_string + ".txt")
+        filename = path.join(out_path, "piece_" + job_string + ".txt")
+        logger.debug('Writing Piece File.')
         with open(filename, 'w') as fp:
             fp.write(out_str.join(piece_strings) + '\n')
         fp.close()
-        self.curr_exit_time = None
+        self.curr_time = None
+        return damage_list
 
     def gen_reprints(self, damage_list, ops):
         out_str = "\n"
         out_path = folder_construct()[2]
         reprint_strings = []
-        self.curr_time = self.creation + datetime.timedelta(hours=2)
+        self.curr_time = self.creation[1] + datetime.timedelta(hours=2)
         job_string = self.site_prefix + str(self.current_jobid).zfill(7)
 
         for i in damage_list:
@@ -309,18 +313,12 @@ class JIFBuilder(Template):
                                                                                    pieceid=str(i).zfill(6),
                                                                                    time=self.curr_time,
                                                                                    result='0', op=ops))
-            if i % 2 == 0:
+            if i % self.r_speed == 0:
                 self.curr_time = self.add_seconds(self.curr_time, 1)
 
         filename = path.join(out_path, "reprint_" + job_string + ".txt")
+        logger.debug('Writing Reprint File.')
         with open(filename, 'w') as fp:
             fp.write(out_str.join(reprint_strings) + '\n')
         fp.close()
         self.curr_time = None
-
-
-
-    def __repr__(self):
-        return "<BaseJIF(template_name='%s', piece_level='%s', num_jifs='%s')>" % \
-               (self.template_name, self.piece_level, self.num_jifs)
-

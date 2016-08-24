@@ -2,6 +2,9 @@ from os import path
 import datetime
 from django.shortcuts import get_object_or_404
 from ..models import JIFTemplate
+from automated_APTDemo import logging_setup
+
+logger = logging_setup.init_logging()
 
 __author__ = 'venom'
 
@@ -15,7 +18,7 @@ class Template(object):
         self.job_id = '0000001'
         self.template_name = jif.template_name
         self.piece_range = jif.piece_range
-        self.sheet_range = '1, 20'
+        self.sheet_range = '1, 8'
         self.num_jifs = 1
         self.account = jif.account_id
         self.job_name = jif.job_name
@@ -33,7 +36,7 @@ class Template(object):
         self.userinfo4 = jif.user_info_4
         self.userinfo5 = jif.user_info_5
         self.contact_email = jif.contact_email
-        self.imp_mult = '1,2,4'
+        self.imp_mult = '1,2'
         self.shift_1_operators = jif.shift_1_operators
         self.shift_2_operators = jif.shift_2_operators
         self.shift_3_operators = jif.shift_3_operators
@@ -61,22 +64,26 @@ class Template(object):
             return None
 
     def jobid_loader(self):
+        logger.debug('JobID Loader called')
         local_path = path.dirname(path.abspath(__file__))
+        logger.debug('Data path = {}'.format(local_path))
         seeder = path.join(local_path, "job_seed.txt")
-        if not path.isfile('job_seed.txt'):
+        if not path.isfile(seeder):
             with open(seeder, 'w') as fp:
                 fp.write('0000001')
             fp.close()
             self.current_jobid = 1
+            logger.debug('Jobid set to 1 called inside non found seed file.')
         else:
             with open(seeder, 'r') as fp:
                 self.current_jobid = int(fp.read())
+                logger.debug('Jobid = {}'.format(self.current_jobid))
             fp.close()
 
     def jobid_saver(self):
         local_path = path.dirname(path.abspath(__file__))
         seeder = path.join(local_path, "job_seed.txt")
-        if not path.isfile('job_seed.txt'):
+        if not path.isfile(seeder):
             with open(seeder, 'w') as fp:
                 fp.write('0000001')
             fp.close()

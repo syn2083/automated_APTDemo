@@ -10,7 +10,8 @@ class DemoConfigForm(forms.ModelForm):
         model = DemoConfig
         fields = ['idc_1_path', 'idc_1_time', 'idc_1_type', 'idc_2_path', 'idc_2_time', 'idc_2_type', 'idc_3_path',
                   'idc_3_time', 'idc_3_type', 'idc_4_path', 'idc_4_time', 'idc_4_type', 'jdf_input_path',
-                  'jif_acks_path', 'reprint_path', 'proc_phase_path', 'td_multi_path', 'td_type']
+                  'jif_acks_path', 'reprint_path', 'proc_phase_path', 'td_multi_path', 'td_type', 'idc_1_ps', 'idc_2_ps',
+                  'idc_3_ps', 'idc_4_ps']
 
 
 class JIFTemplateForm(forms.ModelForm):

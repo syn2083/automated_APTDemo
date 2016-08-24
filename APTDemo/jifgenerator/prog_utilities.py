@@ -5,7 +5,7 @@ from os import path, makedirs
 def folder_construct():
         pathers = []
         local_path = path.dirname(path.abspath(__file__))
-        template_dir = path.join(local_path, "output\\" + 'APTDemo')
+        template_dir = path.join(local_path, "output\\" + 'aptdemo')
         pathers.append(template_dir)
         outjif = path.join(template_dir, "jif_output")
         pathers.append(outjif)
