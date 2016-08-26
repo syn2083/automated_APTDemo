@@ -1,24 +1,19 @@
-import time
-import sys
 import os
-import shutil
+import xmltodict
 from automated_APTDemo import logging_setup
-from watchdog.observers import Observer
 from watchdog.events import PatternMatchingEventHandler
-from django.shortcuts import get_object_or_404
-from APTDemo.models import DemoConfig
 
 logger = logging_setup.init_logging()
 
 
-class FolderHandler(PatternMatchingEventHandler):
-    jif_proc_pattern = ['*.accepted']
-    reprint_pattern = ['*.txt']
-    proc_xml_pattern = ['*.xml']
+class JIFAckHandler(PatternMatchingEventHandler):
+    accept_pattern = ['*.accepted']
+    fail_pattern = ['*.failed']
 
-    def __init__(self, controller):
+    def __init__(self, command_queue, lock):
         super().__init__()
-        self.master = controller
+        self.command_queue = command_queue
+        self.lock = lock
 
     def process(self, event):
         """
@@ -29,24 +24,110 @@ class FolderHandler(PatternMatchingEventHandler):
         event.src_path
             path/to/observed/file
         """
-        logger.debug('{}{}'.format(event.src_path, event.event_type))
-        filename = str(event.src_path).split('\\')[-1]
-        if 'accepted' in filename.split('.'):
-            print('JIF {} accepted, proceeding...'.format(filename.split('.')[0]))
-            exit_name = 'exit_{}.txt'.format(filename.split('.')[0])
-            if os.path.exists(os.path.join(self.master.datafolder, exit_name)):
-                print('Exit data exists, copying!')
-                shutil.copy(os.path.join(self.master.datafolder, exit_name),
-                            os.path.join('C:\\APTApplication\\ICD\\TDInput', exit_name))
-                print('Trackdevice should be running now!')
-        if 'txt' in filename.split('.'):
-            pass
-        if 'xml' in filename.split('.'):
-            pass
 
-    def on_modified(self, event):
-        self.process(event)
+        full_filename = str(event.src_path).split('\\')[-1]
+        job_id = full_filename.split('.')[0]
+        result = full_filename.split('.')[-1]
+
+        if 'accepted' in result:
+            logger.debug('JIF ACK - Accepted Job {}'.format(job_id))
+            self.lock.acquire()
+            self.command_queue.append(['Accepted', job_id])
+            self.lock.release()
+
+        if 'failed' in result:
+            logger.debug('JIF ACK - Failed Job {}'.format(job_id))
+            self.lock.acquire()
+            self.command_queue.append(['Failed', job_id])
+            self.lock.release()
 
     def on_created(self, event):
         self.process(event)
 
+
+class ReprintHandler(PatternMatchingEventHandler):
+    reprint_pattern = ['*.txt']
+
+    def __init__(self, command_queue, lock):
+        super().__init__()
+        self.command_queue = command_queue
+        self.lock = lock
+
+    def process(self, event):
+        """
+        event.event_type
+            'modified' | 'created' | 'moved' | 'deleted'
+        event.is_directory
+            True | False
+        event.src_path
+            path/to/observed/file
+        """
+        full_filename = str(event.src_path).split('\\')[-1]
+        job_id = full_filename.split('.')[0]
+
+        if os.path.getsize(event.src_path) == 0:
+            logger.debug('Reprint - Completed Job {}'.format(job_id))
+            self.lock.acquire()
+            self.command_queue.append(['Complete', job_id])
+            self.lock.release()
+        else:
+            logger.debug('Reprint - Reprint Job {}'.format(job_id))
+            self.lock.acquire()
+            self.command_queue.append(['Reprint', job_id])
+            self.lock.release()
+
+    def on_created(self, event):
+        self.process(event)
+
+
+class ProcChangeManager(PatternMatchingEventHandler):
+    reprint_pattern = ['*.xml']
+
+    def __init__(self, command_queue, lock):
+        super().__init__()
+        self.command_queue = command_queue
+        self.lock = lock
+
+    def process(self, event):
+        """
+        event.event_type
+            'modified' | 'created' | 'moved' | 'deleted'
+        event.is_directory
+            True | False
+        event.src_path
+            path/to/observed/file
+        """
+        xml_string = None
+        while True:
+            try:
+                with open(event.src_path, 'r') as xml_source:
+                    x = xml_source.read()
+                xml_string = xmltodict.parse(x)
+                break
+            except:
+                pass
+
+        element = dict(xml_string.get('EventOutput', {}).get('Job', {}))
+        if element['ID'][:2] == 'A1':
+            if element['JobStatus'] == '1026' or element['JobStatus'] == '1030':
+                logger.debug('Proc Mon - Multi-Step Print Finished Job {}'.format(element['ID']))
+                self.lock.acquire()
+                self.command_queue.append(['Proc', element['ID']])
+                self.lock.release()
+        if element['ID'][:2] == 'A2':
+            if element['JobStatus'] == '2176':
+                logger.debug('Proc Mon - Reprint workaround for Finisher Job {}'.format(element['ID']))
+                self.lock.acquire()
+                self.command_queue.append(['Reprint', element['ID']])
+                self.lock.release()
+            if element['JobStatus'] == '2048':
+                logger.debug('Proc Mon - Complete workaround for Finisher Job {}'.format(element['ID']))
+                self.lock.acquire()
+                self.command_queue.append(['Complete', element['ID']])
+                self.lock.release()
+
+    def on_created(self, event):
+        self.process(event)
+
+    def on_modified(self, event):
+        self.process(event)

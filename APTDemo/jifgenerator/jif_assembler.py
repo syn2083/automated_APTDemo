@@ -1,9 +1,10 @@
 import datetime
+import os
+import shutil
 from random import choice, randint, sample
 from os import path
 from .jif_templater import Template
 from .prog_utilities import folder_construct, str_to_list, find_shift
-from .. import settings
 from django.shortcuts import get_object_or_404
 from ..models import DemoConfig
 from automated_APTDemo import logging_setup
@@ -137,13 +138,13 @@ class JIFBuilder(Template):
             jif_strings.append(" <UserInfo3>{}</UserInfo3>".format(choice(conv_dict['userinfo3'][1])))
             jif_strings.append(" <UserInfo4>{}</UserInfo4>".format(choice(conv_dict['userinfo4'][1])))
             jif_strings.append(" <UserInfo5>{}</UserInfo5>".format(choice(conv_dict['userinfo5'][1])))
-            jif_strings.append("  <JobManifest>")
-            logger.debug('Building piece manifest.')
+            # jif_strings.append("  <JobManifest>")
+            logger.debug('Building Sheets.')
             for t in range(1, self.current_piececount + 1):
                 result = self.piece_builder(t)
-                jif_strings.append(result[0])
+                # jif_strings.append(result[0])
                 sheet_list.append(result[1])
-            jif_strings.append("  </JobManifest>")
+            # jif_strings.append("  </JobManifest>")
             multi = int(choice(conv_dict['imp_mult'][1]))
             sheets = 0
             for x in sheet_list:
@@ -182,10 +183,15 @@ class JIFBuilder(Template):
             self.generated_jobs += 1
             logger.debug('Saving Job Seed')
             self.jobid_saver()
-            filename = path.join(self.out, self.site_prefix + self.id_to_str(self.current_jobid) + ".jif")
+            temp_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output\\aptdemo\\jif_output')
+            filename = path.join(temp_folder, present_jobid + ".jif")
             with open(filename, 'w') as fp:
                 fp.write(jstr)
             fp.close()
+            logger.debug('Copying JIF to JDF folder.')
+            shutil.copyfile(filename, os.path.join(self.out, present_jobid + '.jif'))
+            logger.debug('Cleaning temp JIF')
+            os.remove(filename)
             logger.debug('JIF creation completed. {} has been sent to APT.'.format(present_jobid))
             return present_jobid
 
@@ -307,12 +313,23 @@ class JIFBuilder(Template):
         reprint_strings = []
         self.curr_time = self.creation[1] + datetime.timedelta(hours=2)
         job_string = self.site_prefix + str(self.current_jobid).zfill(7)
+        operator = None
 
-        for i in damage_list:
+        if find_shift() == 1:
+            operator = choice(ops['shift_1_ops'][1])
+        if find_shift() == 2:
+            operator = choice(ops['shift_2_ops'][1])
+        if find_shift() == 3:
+            operator = choice(ops['shift_3_ops'][1])
+
+        unique_damages = [i for i in set(damage_list)]
+
+        for i in unique_damages:
             reprint_strings.append("{jobid},{pieceid},{time},{result},{op}".format(jobid=job_string,
                                                                                    pieceid=str(i).zfill(6),
                                                                                    time=self.curr_time,
-                                                                                   result='0', op=ops))
+                                                                                   result='0',
+                                                                                   op=operator))
             if i % self.r_speed == 0:
                 self.curr_time = self.add_seconds(self.curr_time, 1)
 

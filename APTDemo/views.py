@@ -1,4 +1,6 @@
 import django.http
+import threading
+from watchdog.observers import Observer
 from automated_APTDemo import logging_setup
 from django.shortcuts import render, get_object_or_404, redirect, render_to_response
 from .controller import DemoController
@@ -7,6 +9,7 @@ from .forms import DemoConfigForm, JIFTemplateForm
 from .controller import DemoController
 from django.views.decorators.csrf import csrf_exempt
 from django.template import RequestContext
+from .folder_monitor import folder_monitor_handler as fmh
 
 logger = logging_setup.init_logging()
 
@@ -14,6 +17,30 @@ demo_conf = get_object_or_404(DemoConfig, pk=1)
 icd_folders = [demo_conf.idc_1_path, demo_conf.idc_2_path, demo_conf.idc_3_path,
                demo_conf.idc_4_path, demo_conf.td_multi_path]
 control = DemoController(demo_conf.jdf_input_path, icd_folders)
+
+
+class Dispatcher(threading.Thread):
+    def __init__(self, command_queue, lock):
+        super().__init__()
+        self.command_queue = command_queue
+        self.lock = lock
+
+    def run(self):
+        while True:
+            try:
+                #self.lock.acquire()
+                #logger.debug('Dispatcher acquired a lock..')
+                payload = self.command_queue.popleft()
+                if payload[0] in ['Accepted', 'Failed']:
+                    logger.debug('Calling new job controller')
+                    control.new_job(payload)
+                if payload[0] in ['Reprint', 'Complete']:
+                    control.reprint_job(payload)
+                if payload[0] in 'Proc':
+                    control.proc_phase(payload)
+                #self.lock.release()
+            except IndexError:
+                pass
 
 
 def demo_central(request):
@@ -35,8 +62,29 @@ def demo_controls(request):
 def start_demo(request):
     demo_conf = get_object_or_404(DemoConfig, pk=1)
     logger.debug('Start demo request.')
+    control.lock = threading.Lock()
+    control.dispatcher = Dispatcher(control.command_queue, control.lock)
+    control.dispatcher.start()
+
+    logger.debug('Starting jif monitor.')
+    jifack = Observer()
+    jifack.schedule(fmh.JIFAckHandler(control.command_queue, control.lock), path=demo_conf.jif_acks_path)
+    jifack.start()
+    control.observers.append(jifack)
+    logger.debug('Starting reprint monitor.')
+    reprintmon = Observer()
+    reprintmon.schedule(fmh.ReprintHandler(control.command_queue, control.lock), path=demo_conf.reprint_path)
+    reprintmon.start()
+    control.observers.append(reprintmon)
+    logger.debug('Starting proc change monitor.')
+    proc_mon = Observer()
+    proc_mon.schedule(fmh.ProcChangeManager(control.command_queue, control.lock), path=demo_conf.proc_phase_path)
+    proc_mon.start()
+    control.observers.append(proc_mon)
+    logger.debug('Monitors initialized.')
     reply = control.start_demo()
     control.demo_status = 1
+    #control.dispatcher.join()
     return django.http.HttpResponse(reply)
 
 
